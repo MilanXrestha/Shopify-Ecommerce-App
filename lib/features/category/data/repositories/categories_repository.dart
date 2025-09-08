@@ -37,7 +37,7 @@ class CategoriesRepository {
       final List<dynamic> categoriesJson = response;
       _logger.d('Parsed ${categoriesJson.length} categories');
 
-      // Convert JSON maps directly to CategoryModel (do NOT call .toString())
+      // Convert JSON maps directly to CategoryModel
       final List<CategoryModel> remoteCategories = categoriesJson
           .map((category) => CategoryModel.fromJson(category))
           .toList();
@@ -55,13 +55,10 @@ class CategoriesRepository {
         await _databaseHelper.insertCategory(category.toMap());
       }
 
-      // Optional: debug database content
-      await _databaseHelper.debugCategories();
-
-      // Load all categories (including local ones) from database
+      // Load all categories from database (includes local ones)
       _logger.d('Loading all categories (including local ones) from database');
-      final localCategoriesMap = await _databaseHelper.getCategories();
-      final List<CategoryModel> allCategories = localCategoriesMap
+      final categoriesMap = await _databaseHelper.getCategories();
+      final List<CategoryModel> allCategories = categoriesMap
           .map((map) => CategoryModel.fromDatabase(map))
           .toList();
 
@@ -104,32 +101,55 @@ class CategoriesRepository {
     }
   }
 
-  Future<void> addCustomCategory(String name) async {
-    _logger.i('Adding custom category: $name');
-
-    // Generate slug from name
-    final slug = name.toLowerCase().replaceAll(' ', '-');
-
-    // Format name consistently
-    final formattedName = CategoryModel.formatCategoryName(slug);
-
-    // Create CategoryModel
-    final newCategory = CategoryModel(
-      name: formattedName,
-      slug: slug,
-      isLocal: true,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-    );
-
-    // Save to database
-    await _databaseHelper.insertCategory(newCategory.toMap());
+  // Add local category with provided name, slug and image path
+  Future<void> addLocalCategory(
+    String name,
+    String slug,
+    String? imagePath,
+  ) async {
     _logger.d(
-      'Custom category added: name=${newCategory.name}, slug=${newCategory.slug}',
+      'Adding local category: $name, slug: $slug, imagePath: $imagePath',
     );
 
-    // Reload categories after adding
-    await loadCategories();
-    _logger.i('Categories reloaded after adding custom category');
+    // Check if slug already exists
+    final exists = await _databaseHelper.categorySlugExists(slug);
+    if (exists) {
+      throw Exception('A category with this name already exists');
+    }
+
+    // Add to database
+    await _databaseHelper.insertLocalCategory(name, slug, imagePath);
+
+    // Load and update categories list without full refresh
+    final categoriesMap = await _databaseHelper.getCategories();
+    final List<CategoryModel> allCategories = categoriesMap
+        .map((map) => CategoryModel.fromDatabase(map))
+        .toList();
+
+    // Sort alphabetically
+    allCategories.sort((a, b) => a.name.compareTo(b.name));
+
+    // Update the value notifier
+    categories.value = allCategories;
+  }
+
+  // Delete a local category by slug
+  Future<void> deleteLocalCategory(String slug) async {
+    _logger.d('Deleting local category: $slug');
+
+    await _databaseHelper.deleteLocalCategory(slug);
+
+    // Load and update categories list without full refresh
+    final categoriesMap = await _databaseHelper.getCategories();
+    final List<CategoryModel> allCategories = categoriesMap
+        .map((map) => CategoryModel.fromDatabase(map))
+        .toList();
+
+    // Sort alphabetically
+    allCategories.sort((a, b) => a.name.compareTo(b.name));
+
+    // Update the value notifier
+    categories.value = allCategories;
   }
 
   // Helper method to get products by category slug

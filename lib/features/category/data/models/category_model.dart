@@ -3,12 +3,14 @@ class CategoryModel {
   final String slug;
   final bool isLocal;
   final int? timestamp;
+  final String? imagePath; // Added for custom category images
 
   CategoryModel({
     required this.name,
     required this.slug,
     this.isLocal = false,
     this.timestamp,
+    this.imagePath, // New field for custom image path
   });
 
   factory CategoryModel.fromJson(dynamic category) {
@@ -28,6 +30,7 @@ class CategoryModel {
         name: category['name'] ?? formatCategoryName(category['slug'] ?? ''),
         slug: category['slug'] ?? '',
         isLocal: false,
+        imagePath: category['imagePath'],
         timestamp: DateTime.now().millisecondsSinceEpoch,
       );
     }
@@ -46,6 +49,7 @@ class CategoryModel {
       name: map['name'] ?? formatCategoryName(map['slug'] ?? ''),
       slug: map['slug'] ?? '',
       isLocal: map['isLocal'] == 1,
+      imagePath: map['imagePath'],
       timestamp: map['timestamp'],
     );
   }
@@ -55,6 +59,7 @@ class CategoryModel {
       'name': name,
       'slug': slug,
       'isLocal': isLocal ? 1 : 0,
+      'imagePath': imagePath,
       'timestamp': timestamp ?? DateTime.now().millisecondsSinceEpoch,
     };
   }
@@ -66,9 +71,9 @@ class CategoryModel {
         .split('-')
         .map(
           (word) => word.isEmpty
-          ? ''
-          : '${word[0].toUpperCase()}${word.substring(1)}',
-    )
+              ? ''
+              : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
         .join(' ');
   }
 

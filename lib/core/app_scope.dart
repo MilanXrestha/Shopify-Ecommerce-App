@@ -14,7 +14,6 @@ class AppScope extends InheritedWidget {
   final ProductsRepository productsRepository;
   final CategoriesRepository categoriesRepository;
   final CartRepository cartRepository;
-  // Add the userProfile ValueNotifier as a class field
   final ValueNotifier<Map<String, dynamic>?> userProfile;
 
   const AppScope({
@@ -69,8 +68,8 @@ class AppScope extends InheritedWidget {
       productsRepository: productsRepository,
       cartRepository: cartRepository,
       categoriesRepository: categoriesRepository,
-      userProfile: userProfile, // Pass the userProfile
-      child: Container(), // This will be replaced
+      userProfile: userProfile,
+      child: Container(),
     );
 
     // Load user profile data immediately
@@ -92,6 +91,6 @@ class AppScope extends InheritedWidget {
     return baseUrl != oldWidget.baseUrl ||
         productsRepository != oldWidget.productsRepository ||
         cartRepository != oldWidget.cartRepository ||
-        userProfile != oldWidget.userProfile; // Add userProfile to the comparison
+        userProfile != oldWidget.userProfile;
   }
 }

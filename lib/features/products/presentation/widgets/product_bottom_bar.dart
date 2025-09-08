@@ -58,7 +58,7 @@ class ProductBottomBar extends StatelessWidget {
 
             // Add to cart button
             Expanded(
-              flex: 6,
+              flex: 3,
               child: ElevatedButton(
                 onPressed: product.isInStock && !isAddingToCart
                     ? onAddToCart

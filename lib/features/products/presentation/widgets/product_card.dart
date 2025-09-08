@@ -3,8 +3,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../../../../core/app_scope.dart';
 import '../../data/models/product_model.dart';
+import '../../data/repositories/products_repository.dart';
 
-class ProductCard extends StatelessWidget {
+class ProductCard extends StatefulWidget {
   final ProductModel product;
   final VoidCallback onTap;
   final bool showDiscount;
@@ -27,13 +28,36 @@ class ProductCard extends StatelessWidget {
   });
 
   @override
+  State<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<ProductCard> {
+  bool _isFavorite = false;
+  late ProductsRepository _productsRepository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _productsRepository = AppScope.of(context).productsRepository;
+    _checkFavoriteStatus();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    final isFav = await _productsRepository.isFavorite(widget.product.id);
+    if (mounted) {
+      setState(() {
+        _isFavorite = isFav;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Calculate image container height to include padding
-    final imageContainerHeight = imageHeight + 16;
-    final productsRepository = AppScope.of(context).productsRepository;
+    final imageContainerHeight = widget.imageHeight + 16;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         width: 190,
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -65,18 +89,18 @@ class ProductCard extends StatelessWidget {
                       height: imageContainerHeight,
                       width: double.infinity,
                       child: CachedNetworkImage(
-                        imageUrl: product.thumbnail,
-                        height: imageHeight,
+                        imageUrl: widget.product.thumbnail,
+                        height: widget.imageHeight,
                         width: double.infinity,
                         fit: BoxFit.contain,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[300],
-                          height: imageHeight,
+                          height: widget.imageHeight,
                           width: double.infinity,
                         ),
                         errorWidget: (context, url, error) => Container(
                           color: Colors.grey[300],
-                          height: imageHeight,
+                          height: widget.imageHeight,
                           width: double.infinity,
                           child: const Icon(Icons.error),
                         ),
@@ -85,7 +109,7 @@ class ProductCard extends StatelessWidget {
                   ),
 
                   // NEW tag
-                  if (showNewTag)
+                  if (widget.showNewTag)
                     Positioned(
                       top: 8,
                       left: 8,
@@ -110,9 +134,9 @@ class ProductCard extends StatelessWidget {
                     ),
 
                   // Discount badge
-                  if (product.discountPercentage > 0 && showDiscount)
+                  if (widget.product.discountPercentage > 0 && widget.showDiscount)
                     Positioned(
-                      top: showNewTag ? 42 : 8,
+                      top: widget.showNewTag ? 42 : 8,
                       left: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -131,7 +155,7 @@ class ProductCard extends StatelessWidget {
                           ],
                         ),
                         child: Text(
-                          '-${product.discountPercentage.toStringAsFixed(0)}%',
+                          '-${widget.product.discountPercentage.toStringAsFixed(0)}%',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -141,43 +165,47 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
 
-                  // Favorite button
+                  // Favorite button - now using local state for immediate UI updates
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: ValueListenableBuilder<List<ProductModel>>(
-                      valueListenable: productsRepository.favorites,
-                      builder: (context, favorites, _) {
-                        final isFavorite = favorites.any((p) => p.id == product.id);
-                        return Container(
-                          height: 36,
-                          width: 36,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.8),
-                            shape: BoxShape.circle,
+                    child: Container(
+                      height: 36,
+                      width: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: IconButton(
+                          icon: Icon(
+                            _isFavorite ? Icons.favorite : Icons.favorite_border,
+                            size: 20,
                           ),
-                          child: Center(
-                            child: IconButton(
-                              icon: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                size: 20,
-                              ),
-                              color: Colors.red,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 36,
-                                minHeight: 36,
-                              ),
-                              onPressed: onFavoriteToggle,
-                            ),
+                          color: Colors.red,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
                           ),
-                        );
-                      },
+                          onPressed: () {
+                            // Toggle local state immediately for UI feedback
+                            setState(() {
+                              _isFavorite = !_isFavorite;
+                            });
+
+                            // Call the repository function
+                            if (widget.onFavoriteToggle != null) {
+                              widget.onFavoriteToggle!();
+                            }
+                          },
+                        ),
+                      ),
                     ),
                   ),
 
                   // Out of stock overlay
-                  if (!product.isInStock)
+                  if (!widget.product.isInStock)
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
@@ -203,7 +231,7 @@ class ProductCard extends StatelessWidget {
 
             // Product details with consistent layout
             Padding(
-              padding: contentPadding,
+              padding: widget.contentPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -211,7 +239,7 @@ class ProductCard extends StatelessWidget {
                   SizedBox(
                     height: 16,
                     child: Text(
-                      product.brand,
+                      widget.product.brand,
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
@@ -225,7 +253,7 @@ class ProductCard extends StatelessWidget {
                   SizedBox(
                     height: 40,
                     child: Text(
-                      product.title,
+                      widget.product.title,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
@@ -236,13 +264,13 @@ class ProductCard extends StatelessWidget {
                   ),
 
                   // Rating with consistent spacing
-                  if (showRating)
+                  if (widget.showRating)
                     SizedBox(
                       height: 24,
                       child: Row(
                         children: [
                           RatingBarIndicator(
-                            rating: product.rating,
+                            rating: widget.product.rating,
                             itemBuilder: (context, _) =>
                             const Icon(Icons.star, color: Colors.amber),
                             itemCount: 5,
@@ -250,7 +278,7 @@ class ProductCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '(${product.rating})',
+                            '(${widget.product.rating})',
                             style: TextStyle(
                               fontSize: 12,
                               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
@@ -266,17 +294,17 @@ class ProductCard extends StatelessWidget {
                     child: Row(
                       children: [
                         Text(
-                          '\$${product.discountedPrice.toStringAsFixed(2)}',
+                          '\$${widget.product.discountedPrice.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                             color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
-                        if (product.discountPercentage > 0) ...[
+                        if (widget.product.discountPercentage > 0) ...[
                           const SizedBox(width: 2),
                           Text(
-                            '\$${product.price.toStringAsFixed(2)}',
+                            '\$${widget.product.price.toStringAsFixed(2)}',
                             style: TextStyle(
                               fontWeight: FontWeight.normal,
                               fontSize: 12,

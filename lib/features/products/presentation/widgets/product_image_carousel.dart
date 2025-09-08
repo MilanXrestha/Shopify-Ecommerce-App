@@ -74,13 +74,13 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
             children: widget.product.images.map((imageUrl) {
               return Container(
                 decoration: BoxDecoration(color: Colors.grey[100]),
+
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  placeholder: (context, url) => Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primaryLight,
-                    ),
+                  placeholder: (context, url) => Image.asset(
+                    'assets/images/categories/placeholder.png',
+                    fit: BoxFit.contain,
                   ),
                   errorWidget: (context, url, error) => Center(
                     child: Icon(
@@ -90,6 +90,10 @@ class _ProductImageCarouselState extends State<ProductImageCarousel> {
                     ),
                   ),
                 ),
+
+
+
+
               );
             }).toList(),
           ),

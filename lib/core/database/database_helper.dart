@@ -23,13 +23,38 @@ class DatabaseHelper {
 
     _logger.i('Initializing database at $path');
 
-    // Pass the onUpgrade callback to handle migrations
     _database = await openDatabase(
       path,
-      version: 2, // Increment the version for schema changes
+      version: 4, // Increment version to force migration
       onCreate: _createDb,
       onUpgrade: _upgradeDb,
+      onOpen: _onDatabaseOpen,
     );
+  }
+
+  // Add an onOpen callback to verify and fix schema if needed
+  Future<void> _onDatabaseOpen(Database db) async {
+    _logger.i('Database opened, verifying schema integrity');
+    await _ensureCategoriesSchema(db);
+  }
+
+  // Check and fix categories table schema if needed
+  Future<void> _ensureCategoriesSchema(Database db) async {
+    try {
+      // Check if imagePath column exists in categories table
+      var tableInfo = await db.rawQuery("PRAGMA table_info(categories)");
+      var columnNames = tableInfo.map((col) => col['name'].toString()).toList();
+
+      _logger.d('Categories table columns: $columnNames');
+
+      if (!columnNames.contains('imagePath')) {
+        _logger.w('imagePath column missing from categories table. Adding it now.');
+        await db.execute('ALTER TABLE categories ADD COLUMN imagePath TEXT');
+        _logger.i('Successfully added imagePath column to categories table');
+      }
+    } catch (e) {
+      _logger.e('Error ensuring categories schema: $e');
+    }
   }
 
   Future<Database> get database async {
@@ -77,6 +102,7 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         slug TEXT NOT NULL UNIQUE,
         isLocal INTEGER NOT NULL DEFAULT 0,
+        imagePath TEXT,
         timestamp INTEGER
       )
     ''');
@@ -200,6 +226,48 @@ class DatabaseHelper {
         _logger.e('Error upgrading database: $e');
       }
     }
+
+    // Add imagePath to categories table for version 3 or 4
+    if (oldVersion < 4) {
+      try {
+        // Check if imagePath column already exists to avoid errors
+        var tableInfo = await db.rawQuery("PRAGMA table_info(categories)");
+        var columnNames = tableInfo
+            .map((col) => col['name'].toString())
+            .toList();
+
+        _logger.d('Categories columns before migration: $columnNames');
+
+        if (!columnNames.contains('imagePath')) {
+          _logger.d('Adding imagePath column to categories table');
+          await db.execute('ALTER TABLE categories ADD COLUMN imagePath TEXT');
+          _logger.i('Successfully added imagePath column to categories table');
+        } else {
+          _logger.d('imagePath column already exists in categories table');
+        }
+      } catch (e) {
+        _logger.e('Error adding imagePath to categories table: ');
+      }
+    }
+  }
+
+  Future<void> recreateDatabase() async {
+    _logger.w('Recreating database from scratch');
+    final databasesPath = await getDatabasesPath();
+    final path = join(databasesPath, AppConstants.databaseName);
+
+    // Close database if open
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+
+    // Delete database file
+    await deleteDatabase(path);
+
+    // Reinitialize database
+    await initDatabase();
+    _logger.i('Database recreated successfully');
   }
 
   // Products methods
@@ -298,14 +366,14 @@ class DatabaseHelper {
           query += ' ORDER BY title $direction';
           break;
         case 'date':
-          // Assuming timestamp represents creation date
+        // Assuming timestamp represents creation date
           query += ' ORDER BY timestamp $direction';
           break;
         case 'popularity':
         default:
-          // A simple popularity formula combining rating and discount
+        // A simple popularity formula combining rating and discount
           query +=
-              ' ORDER BY (rating * 3 + discountPercentage * 0.2) $direction';
+          ' ORDER BY (rating * 3 + discountPercentage * 0.2) $direction';
           break;
       }
     } else {
@@ -343,11 +411,11 @@ class DatabaseHelper {
 
   // Get similar products
   Future<List<Map<String, dynamic>>> getSimilarProducts(
-    int productId,
-    String category,
-    String? brand, {
-    int limit = 5,
-  }) async {
+      int productId,
+      String category,
+      String? brand, {
+        int limit = 5,
+      }) async {
     final db = await database;
 
     // First try to find products in same category and brand
@@ -442,9 +510,6 @@ class DatabaseHelper {
   }
 
   // Cart methods
-  // Add these methods to your existing DatabaseHelper class
-
-  // Cart methods with variant support
   Future<int> insertCartItem(Map<String, dynamic> cartItem) async {
     final db = await database;
 
@@ -452,7 +517,7 @@ class DatabaseHelper {
     final List<Map<String, dynamic>> existing = await db.query(
       'cart_items',
       where:
-          'productId = ? AND selectedSize = ? AND selectedColor = ? AND selectedStorage = ?',
+      'productId = ? AND selectedSize = ? AND selectedColor = ? AND selectedStorage = ?',
       whereArgs: [
         cartItem['productId'],
         cartItem['selectedSize'],
@@ -580,7 +645,72 @@ class DatabaseHelper {
     return favorites.isNotEmpty;
   }
 
-  // Get database statistics for debugging
+  // Custom category methods
+  Future<List<Map<String, dynamic>>> getLocalCategories() async {
+    final db = await database;
+    return await db.query(
+      'categories',
+      where: 'isLocal = ?',
+      whereArgs: [1],
+      orderBy: 'name ASC',
+    );
+  }
+
+  // Updated to accept imagePath
+  Future<int> insertLocalCategory(String name, String slug, String? imagePath) async {
+    final db = await database;
+
+    // Ensure the column exists before trying to insert
+    await _ensureCategoriesSchema(db);
+
+    _logger.d('Inserting local category: $name, slug: $slug, imagePath: $imagePath');
+
+    return await db.insert('categories', {
+      'name': name,
+      'slug': slug,
+      'isLocal': 1,
+      'imagePath': imagePath,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<int> deleteLocalCategory(String slug) async {
+    final db = await database;
+    return await db.delete(
+      'categories',
+      where: 'slug = ? AND isLocal = 1',
+      whereArgs: [slug],
+    );
+  }
+
+  Future<bool> categorySlugExists(String slug) async {
+    final db = await database;
+    final result = await db.query(
+      'categories',
+      where: 'slug = ?',
+      whereArgs: [slug],
+      limit: 1,
+    );
+    return result.isNotEmpty;
+  }
+
+  // Get a single category by slug
+  Future<Map<String, dynamic>?> getCategoryBySlug(String slug) async {
+    final db = await database;
+    final List<Map<String, dynamic>> results = await db.query(
+      'categories',
+      where: 'slug = ?',
+      whereArgs: [slug],
+      limit: 1,
+    );
+
+    if (results.isNotEmpty) {
+      return results.first;
+    }
+    return null;
+  }
+
+  // Database statistics and utilities
   Future<Map<String, dynamic>> getDatabaseStats() async {
     final db = await database;
     final stats = <String, dynamic>{};
@@ -608,6 +738,12 @@ class DatabaseHelper {
       await db.rawQuery('SELECT COUNT(*) FROM categories'),
     );
     stats['categoriesCount'] = categoriesCount;
+
+    // Get local categories count
+    final localCategoriesCount = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM categories WHERE isLocal = 1'),
+    );
+    stats['localCategoriesCount'] = localCategoriesCount;
 
     // Get database size (approximate)
     final dbSize = Sqflite.firstIntValue(

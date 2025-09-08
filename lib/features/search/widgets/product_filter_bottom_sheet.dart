@@ -51,24 +51,32 @@ class _ProductFilterBottomSheetState extends State<ProductFilterBottomSheet> {
   }
 
   Widget _buildFilterChip(
-    String label, {
-    required bool isSelected,
-    required Function(bool) onSelected,
-  }) {
+      String label, {
+        required bool isSelected,
+        required Function(bool) onSelected,
+      }) {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
       onSelected: onSelected,
       backgroundColor: Colors.grey[100],
-      selectedColor: AppColors.primaryLight.withOpacity(0.2),
+      selectedColor: AppColors.primaryLight,
       labelStyle: TextStyle(
-        color: isSelected ? AppColors.primaryDark : Colors.grey[700],
+        color: isSelected ? Colors.white : Colors.grey[800],
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
-      checkmarkColor: isSelected ? AppColors.primaryDark : Colors.grey[700],
+      checkmarkColor: Colors.white,
       showCheckmark: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isSelected ? AppColors.primaryDark : Colors.grey[300]!,
+          width: 1,
+        ),
+      ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

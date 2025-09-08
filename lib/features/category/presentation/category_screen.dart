@@ -1,11 +1,11 @@
+import 'dart:io';
+import 'package:e_commerce_app/features/category/presentation/widgets/add_category_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:logger/logger.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../../common/theme/app_colors.dart';
-import '../../../../common/widgets/app_bar_back_button.dart';
 import '../../../../common/widgets/error_display.dart';
 import '../../products/data/models/product_model.dart';
 import '../../products/data/repositories/products_repository.dart';
@@ -22,8 +22,7 @@ class CategoryScreen extends StatefulWidget {
   final String categorySlug;
   final String categoryName;
   final ProductsRepository productsRepository;
-  final CategoriesRepository?
-  categoriesRepository; // Optional for all categories view
+  final CategoriesRepository? categoriesRepository;
 
   const CategoryScreen({
     super.key,
@@ -45,19 +44,16 @@ class _CategoryScreenState extends State<CategoryScreen>
   bool _isLoadingMore = false;
   bool _isLoadingInBackground = false;
   String? _error;
-  String _searchQuery = ''; // Track search input
+  String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // Filter model for modular filtering
   late ProductFilterModel _filterModel = ProductFilterModel();
   bool _hasActiveFilters = false;
   int _loadProgress = 0;
 
-  // Animation controller for list highlighting
   late AnimationController _animationController;
   late Animation<Color?> _colorAnimation;
 
-  // Mapping of category slugs to image assets
   final Map<String, String> _categoryImages = {
     'beauty': 'assets/images/categories/beauty.png',
     'fragrances': 'assets/images/categories/fragrances.png',
@@ -79,12 +75,10 @@ class _CategoryScreenState extends State<CategoryScreen>
       });
     });
 
-    // Setup scroll listener for pagination
     if (widget.categorySlug.isNotEmpty) {
       _scrollController.addListener(_onScroll);
     }
 
-    // Setup animation controller for highlighting
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -110,7 +104,7 @@ class _CategoryScreenState extends State<CategoryScreen>
 
   void _onScroll() {
     if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200 &&
+            _scrollController.position.maxScrollExtent - 200 &&
         !widget.productsRepository.isCurrentlyLoading &&
         widget.productsRepository.hasMoreProducts.value &&
         !_isLoadingInBackground) {
@@ -134,10 +128,8 @@ class _CategoryScreenState extends State<CategoryScreen>
 
     try {
       if (widget.categorySlug.isEmpty && widget.categoriesRepository != null) {
-        // Load categories for "all categories" view
         await widget.categoriesRepository!.loadCategories();
       } else {
-        // Apply filters for category view
         await _applyFilters(refresh: true);
       }
       setState(() => _isLoading = false);
@@ -148,6 +140,85 @@ class _CategoryScreenState extends State<CategoryScreen>
         _error = e.toString();
       });
     }
+  }
+
+  // Updated method to handle custom category with image
+  void _showAddCategoryDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent closing by tapping outside
+      builder: (context) => AddCategoryDialog(
+        onAdd: (name, slug, imagePath) async {
+          try {
+            if (widget.categoriesRepository != null) {
+              await widget.categoriesRepository!.addLocalCategory(
+                name,
+                slug,
+                imagePath,
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Category "$name" added successfully'),
+                  ),
+                );
+              }
+            }
+          } catch (e) {
+            _logger.e('Error adding category: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _confirmDeleteLocalCategory(CategoryModel category) {
+    if (!category.isLocal) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Category'),
+        content: Text('Are you sure you want to delete "${category.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                if (widget.categoriesRepository != null) {
+                  await widget.categoriesRepository!.deleteLocalCategory(
+                    category.slug,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Category deleted')),
+                    );
+                  }
+                }
+              } catch (e) {
+                _logger.e('Error deleting category: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString()}')),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   // Apply client-side filtering immediately for a responsive experience
@@ -166,8 +237,8 @@ class _CategoryScreenState extends State<CategoryScreen>
     if (_filterModel.selectedBrand != null &&
         _filterModel.selectedBrand!.isNotEmpty) {
       products.removeWhere(
-            (p) =>
-        p.brand.toLowerCase() != _filterModel.selectedBrand!.toLowerCase(),
+        (p) =>
+            p.brand.toLowerCase() != _filterModel.selectedBrand!.toLowerCase(),
       );
     }
 
@@ -177,15 +248,15 @@ class _CategoryScreenState extends State<CategoryScreen>
 
     if (_filterModel.availabilityStatus != null) {
       products.removeWhere(
-            (p) => p.availabilityStatus != _filterModel.availabilityStatus,
+        (p) => p.availabilityStatus != _filterModel.availabilityStatus,
       );
     }
 
     if (_filterModel.selectedTags != null &&
         _filterModel.selectedTags!.isNotEmpty) {
       products.removeWhere(
-            (p) => !_filterModel.selectedTags!.any(
-              (tag) =>
+        (p) => !_filterModel.selectedTags!.any(
+          (tag) =>
               p.tags.any((t) => t.toLowerCase().contains(tag.toLowerCase())),
         ),
       );
@@ -194,28 +265,28 @@ class _CategoryScreenState extends State<CategoryScreen>
     // Apply sorting
     if (_filterModel.sortOption != 'Popular') {
       final sortConfig =
-      ProductFilterModel.sortMapping[_filterModel.sortOption]!;
+          ProductFilterModel.sortMapping[_filterModel.sortOption]!;
       final sortBy = sortConfig['sortBy'];
       final ascending = sortConfig['ascending'];
 
       switch (sortBy) {
         case 'price':
           products.sort(
-                (a, b) => ascending
+            (a, b) => ascending
                 ? a.price.compareTo(b.price)
                 : b.price.compareTo(a.price),
           );
           break;
         case 'rating':
           products.sort(
-                (a, b) => ascending
+            (a, b) => ascending
                 ? a.rating.compareTo(b.rating)
                 : b.rating.compareTo(a.rating),
           );
           break;
         case 'discount':
           products.sort(
-                (a, b) => ascending
+            (a, b) => ascending
                 ? a.discountPercentage.compareTo(b.discountPercentage)
                 : b.discountPercentage.compareTo(a.discountPercentage),
           );
@@ -231,7 +302,7 @@ class _CategoryScreenState extends State<CategoryScreen>
           break;
         case 'title':
           products.sort(
-                (a, b) => ascending
+            (a, b) => ascending
                 ? a.title.compareTo(b.title)
                 : b.title.compareTo(a.title),
           );
@@ -293,7 +364,7 @@ class _CategoryScreenState extends State<CategoryScreen>
         minRating: _filterModel.minRating,
         availabilityStatus: _filterModel.availabilityStatus,
         sortBy:
-        ProductFilterModel.sortMapping[_filterModel.sortOption]?['sortBy'],
+            ProductFilterModel.sortMapping[_filterModel.sortOption]?['sortBy'],
         sortAscending: ProductFilterModel
             .sortMapping[_filterModel.sortOption]?['ascending'],
         loadAllProducts: loadAllProducts,
@@ -306,7 +377,7 @@ class _CategoryScreenState extends State<CategoryScreen>
           }
         },
         applyImmediately:
-        !refresh, // Apply immediately for filtering, not for refresh
+            !refresh, // Apply immediately for filtering, not for refresh
       );
     } catch (e) {
       _logger.e('Error applying filters: $e');
@@ -333,7 +404,7 @@ class _CategoryScreenState extends State<CategoryScreen>
     // Re-apply sort if needed
     if (_filterModel.sortOption != 'Popular') {
       final sortConfig =
-      ProductFilterModel.sortMapping[_filterModel.sortOption]!;
+          ProductFilterModel.sortMapping[_filterModel.sortOption]!;
       widget.productsRepository.setSorting(
         sortConfig['sortBy'],
         ascending: sortConfig['ascending'],
@@ -362,9 +433,9 @@ class _CategoryScreenState extends State<CategoryScreen>
         // Determine if we need to load all products for comprehensive results
         final needsAllProducts =
             result.sortOption == 'Price: High to Low' ||
-                result.sortOption == 'Price: Low to High' ||
-                result.minPrice != null ||
-                result.maxPrice != null;
+            result.sortOption == 'Price: Low to High' ||
+            result.minPrice != null ||
+            result.maxPrice != null;
 
         // Apply the filters with instant results
         _applyFilters(loadAllProducts: needsAllProducts);
@@ -382,10 +453,10 @@ class _CategoryScreenState extends State<CategoryScreen>
     widget.productsRepository
         .applyFiltersComprehensive(category: widget.categorySlug)
         .then((_) {
-      setState(() {
-        _isLoadingInBackground = false;
-      });
-    });
+          setState(() {
+            _isLoadingInBackground = false;
+          });
+        });
   }
 
   @override
@@ -448,6 +519,16 @@ class _CategoryScreenState extends State<CategoryScreen>
             ),
         ],
       ),
+      // Add FAB for creating custom categories
+      floatingActionButton:
+          widget.categorySlug.isEmpty && widget.categoriesRepository != null
+          ? FloatingActionButton(
+              backgroundColor: AppColors.primaryLight,
+              onPressed: _showAddCategoryDialog,
+              child: const Icon(Icons.add, color: Colors.white),
+              tooltip: 'Add custom category',
+            )
+          : null,
       body: Column(
         children: [
           if (_hasActiveFilters && widget.categorySlug.isNotEmpty)
@@ -457,11 +538,11 @@ class _CategoryScreenState extends State<CategoryScreen>
             ),
           if (_isLoadingInBackground) _buildBackgroundLoadingIndicator(),
           Expanded(
-              child: _error != null
-                  ? ErrorDisplay(error: _error!, onRetry: _loadData)
-                  : _isLoading && widget.categorySlug.isEmpty
-                  ? _buildShimmerList()
-                  : _buildContent()
+            child: _error != null
+                ? ErrorDisplay(error: _error!, onRetry: _loadData)
+                : _isLoading && widget.categorySlug.isEmpty
+                ? _buildShimmerList()
+                : _buildContent(),
           ),
         ],
       ),
@@ -525,33 +606,46 @@ class _CategoryScreenState extends State<CategoryScreen>
     );
   }
 
+  // Updated to use ValueListenableBuilder for real-time updates
   Widget _buildCategoryList() {
-    final categories = widget.categoriesRepository!.categories.value
-        .where((category) => category.name.toLowerCase().contains(_searchQuery))
-        .toList();
+    return ValueListenableBuilder<List<CategoryModel>>(
+      valueListenable: widget.categoriesRepository!.categories,
+      builder: (context, categories, _) {
+        final filteredCategories = categories
+            .where(
+              (category) => category.name.toLowerCase().contains(_searchQuery),
+            )
+            .toList();
 
-    if (categories.isEmpty) {
-      return const Center(child: Text('No categories found'));
-    }
+        if (filteredCategories.isEmpty) {
+          return const Center(child: Text('No categories found'));
+        }
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          return _buildCategoryItem(category);
-        },
-      ),
+        return RefreshIndicator(
+          onRefresh: _loadData,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: filteredCategories.length,
+            itemBuilder: (context, index) {
+              final category = filteredCategories[index];
+              return _buildCategoryItem(category);
+            },
+          ),
+        );
+      },
     );
   }
 
+  // Updated to handle custom category images
   Widget _buildCategoryItem(CategoryModel category) {
-    final imagePath =
+    // Check if category has a custom image
+    final hasCustomImage = category.isLocal && category.imagePath != null;
+
+    // Default image path from mapping
+    final defaultImagePath =
         _categoryImages[category.slug] ??
-            _categoryImages[''] ??
-            'assets/images/categories/placeholder.png';
+        _categoryImages[''] ??
+        'assets/images/categories/placeholder.png';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -569,72 +663,136 @@ class _CategoryScreenState extends State<CategoryScreen>
             ),
           );
         },
-        child: Card(
-          elevation: 6,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Background image
-              ClipRRect(
+        // Add long press for deleting local categories
+        onLongPress: category.isLocal
+            ? () => _confirmDeleteLocalCategory(category)
+            : null,
+        child: Stack(
+          children: [
+            Card(
+              elevation: 6,
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  imagePath,
-                  height: 180,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Background image - custom image or default
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: hasCustomImage
+                        ? Image.file(
+                            File(category.imagePath!),
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildFallbackImage(),
+                          )
+                        : Image.asset(
+                            defaultImagePath,
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                _buildFallbackImage(),
+                          ),
+                  ),
+                  // Semi-transparent overlay
+                  Container(
                     height: 180,
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: Icon(
-                        Icons.image_not_supported,
-                        color: Colors.grey,
-                        size: 48,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.black.withOpacity(0.5),
+                    ),
+                  ),
+                  // Centered category name
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        category.name,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black87,
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-              // Semi-transparent overlay
-              Container(
-                height: 180,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.black.withOpacity(0.5),
-                ),
-              ),
-              // Centered category name
-              Positioned.fill(
-                child: Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    category.name,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black87,
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
+            ),
+            // Add badge for custom categories
+            if (category.isLocal)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person, size: 14.w, color: Colors.white),
+                      SizedBox(width: 4.w),
+                      Text(
+                        'Custom',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            // Add hint for longpress delete
+            if (category.isLocal)
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Text(
+                    'Long press to delete',
+                    style: TextStyle(color: Colors.white, fontSize: 10.sp),
+                  ),
+                ),
+              ),
+          ],
         ),
+      ),
+    );
+  }
+
+  // Helper method for fallback image display
+  Widget _buildFallbackImage() {
+    return Container(
+      height: 180,
+      color: Colors.grey[300],
+      child: const Center(
+        child: Icon(Icons.image_not_supported, color: Colors.grey, size: 48),
       ),
     );
   }
@@ -661,9 +819,10 @@ class _CategoryScreenState extends State<CategoryScreen>
                 child: MasonryGridView.builder(
                   controller: _scrollController,
                   padding: EdgeInsets.all(8.w),
-                  gridDelegate: SliverSimpleGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                  ),
+                  gridDelegate:
+                      const SliverSimpleGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                      ),
                   mainAxisSpacing: 12.0,
                   crossAxisSpacing: 12.0,
                   itemCount: products.length + 1,
@@ -677,17 +836,19 @@ class _CategoryScreenState extends State<CategoryScreen>
                       product: product,
                       showRating: true,
                       showDiscount: true,
-                      // Make cards more compact
                       imageHeight: 120,
                       contentPadding: const EdgeInsets.all(8),
                       onFavoriteToggle: () async {
-                        await widget.productsRepository.toggleFavorite(product.id);
+                        await widget.productsRepository.toggleFavorite(
+                          product.id,
+                        );
                       },
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ProductDetailScreen(productId: product.id),
+                            builder: (context) =>
+                                ProductDetailScreen(productId: product.id),
                           ),
                         );
                       },
@@ -717,10 +878,10 @@ class _CategoryScreenState extends State<CategoryScreen>
               alignment: Alignment.center,
               child: isLoading || _isLoadingMore
                   ? CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  AppColors.primaryLight,
-                ),
-              )
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryLight,
+                      ),
+                    )
                   : SizedBox(height: 50.h),
             );
           },
@@ -759,53 +920,54 @@ class _CategoryScreenState extends State<CategoryScreen>
           SizedBox(height: 16.h),
           _hasActiveFilters
               ? ElevatedButton(
-            onPressed: _clearAllFilters,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryLight,
-              padding: EdgeInsets.symmetric(
-                horizontal: 24.w,
-                vertical: 12.h,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-            ),
-            child: Text(
-              'Clear Filters',
-              style: TextStyle(
-                fontSize: 16.sp,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          )
+                  onPressed: _clearAllFilters,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryLight,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 24.w,
+                      vertical: 12.h,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                  ),
+                  child: Text(
+                    'Clear Filters',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
               : ElevatedButton(
-            onPressed: _loadData,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryLight,
-              padding: EdgeInsets.symmetric(
-                horizontal: 24.w,
-                vertical: 12.h,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-            ),
-            child: Text(
-              'Refresh',
-              style: TextStyle(
-                fontSize: 16.sp,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
+                  onPressed: _loadData,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryLight,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 24.w,
+                      vertical: 12.h,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                  ),
+                  child: Text(
+                    'Refresh',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
         ],
       ),
     );
   }
 }
 
+// Updated to handle custom category images
 class CategorySearchDelegate extends SearchDelegate<String> {
   final List<CategoryModel> categories;
   final ProductsRepository productsRepository;
@@ -874,8 +1036,8 @@ class CategorySearchDelegate extends SearchDelegate<String> {
     final filteredCategories = categories
         .where(
           (category) =>
-          category.name.toLowerCase().contains(query.toLowerCase()),
-    )
+              category.name.toLowerCase().contains(query.toLowerCase()),
+        )
         .toList();
 
     if (filteredCategories.isEmpty) {
@@ -887,10 +1049,13 @@ class CategorySearchDelegate extends SearchDelegate<String> {
       itemCount: filteredCategories.length,
       itemBuilder: (context, index) {
         final category = filteredCategories[index];
-        final imagePath =
+        final hasCustomImage = category.isLocal && category.imagePath != null;
+
+        // Default image path from mapping
+        final defaultImagePath =
             categoryImages[category.slug] ??
-                categoryImages[''] ??
-                'assets/images/categories/placeholder.png';
+            categoryImages[''] ??
+            'assets/images/categories/placeholder.png';
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
@@ -918,23 +1083,43 @@ class CategorySearchDelegate extends SearchDelegate<String> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      imagePath,
-                      height: 180,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 180,
-                        color: Colors.grey[300],
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_not_supported,
-                            color: Colors.grey,
-                            size: 48,
+                    child: hasCustomImage
+                        ? Image.file(
+                            File(category.imagePath!),
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                                  height: 180,
+                                  color: Colors.grey[300],
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      color: Colors.grey,
+                                      size: 48,
+                                    ),
+                                  ),
+                                ),
+                          )
+                        : Image.asset(
+                            defaultImagePath,
+                            height: 180,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                                  height: 180,
+                                  color: Colors.grey[300],
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      color: Colors.grey,
+                                      size: 48,
+                                    ),
+                                  ),
+                                ),
                           ),
-                        ),
-                      ),
-                    ),
                   ),
                   Container(
                     height: 180,
@@ -968,6 +1153,37 @@ class CategorySearchDelegate extends SearchDelegate<String> {
                       ),
                     ),
                   ),
+                  // Show custom badge in search results too
+                  if (category.isLocal)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.person, size: 14, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'Custom',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

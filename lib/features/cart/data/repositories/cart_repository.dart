@@ -138,12 +138,6 @@ class CartRepository {
         throw Exception('Not enough stock available');
       }
 
-      // Check minimum order quantity
-      if (newQuantity < item.product.minimumOrderQuantity) {
-        throw Exception(
-          'Minimum order quantity is ${item.product.minimumOrderQuantity}',
-        );
-      }
 
       // Update in database
       await _databaseHelper.updateCartItemQuantity(
